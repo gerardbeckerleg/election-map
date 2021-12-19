@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+  .background {
+    fill: none;
+    pointer-events: all;
+  }
+
+  #divisions {
+    fill: #aaa;
+  }
+
+  #divisions .active {
+    fill: orange;
+  }
+
+  #division-borders {
+    fill: none;
+    /* stroke: #fff; */
+    stroke: #aaa;
+    /* stroke-width: 1.5px; */
+    stroke-linejoin: round;
+    stroke-linecap: round;
+    pointer-events: none;
+  }
+  #divisionCard {
+  background:  #aab;
+  top: 0;
+  position: fixed;
+  right: 0;
+  width:50%;
+  margin:2%;
+  padding:1%;
+  color:white;
+  display:none;
+border-color: white;
+}
+#divisionCard a {
+  color: white;
+}
+
+</style>
+
+<body>
+  <div id="divisionCard" >
+    <h1 id="Party">Division</h1>
+    <div id="divisonDetails">
+      <p id="Elect_div">Party</p>
+      <p id="Margin">Margin</p>
+      <p id="Copy">Copy</p>
+      <a id="Link" target="_blank" href="">This is a link entered by a CMS user</a>
+    </div>
+  </div>
+</body>
+<script src="//d3js.org/d3.v4.min.js"></script>
+<script src="//d3js.org/topojson.v2.min.js"></script>
+
+<!-- <script src="//cdn.jsdelivr.net/npm/sweetalert2@8"></script> -->
+<script>
+
+  var width = document.documentElement.clientWidth - 10,
+    height = document.documentElement.clientHeight - 20,
+    centered;
+
+  var projection = d3.geoMercator()
+    .scale(1070)
+    .translate([width / 2, height / 2]);
+
+  var path = d3.geoPath()
+    .projection(projection);
+
+  var svg = d3.select("body").append("svg")
+    .attr("width", width)
+    .attr("height", height);
+
+  svg.append("rect")
+    .attr("class", "background")
+    .attr("width", width)
+    .attr("height", height)
+    .on("click", clicked);
+
+  var g = svg.append("g");
+  d3.csv("electionresults.csv", function (error, data) {
+    if (error) throw error;
+
+    d3.json("/australia.json", function (error, us) {
+      if (error) throw error;
+      for (var i = 0; i < data.length; i++) {
+        var division = data[i].Division;
+        var margin = data[i].Margin;
+        var party = data[i].Party;
+        var link = data[i].Link;
+        var copy = data[i].Copy;
+        for (var j = 0; j < us.objects.originalgeo.geometries.length; j++) {
+          var electDiv = us.objects.originalgeo.geometries[j].properties.Elect_div;
+
+          if (division.toLowerCase() == electDiv.toLowerCase()) {
+
+            us.objects.originalgeo.geometries[j].properties.Elect_div = division;
+            us.objects.originalgeo.geometries[j].properties.Margin = margin;
+            us.objects.originalgeo.geometries[j].properties.Party = party;
+            us.objects.originalgeo.geometries[j].properties.Link = link;
+            us.objects.originalgeo.geometries[j].properties.Copy = copy;
+
+            break;
+          }
+        }
+      }
+      projection.fitSize([width, height], topojson.feature(us, us.objects.originalgeo));
+      g.append("g")
+        .attr("id", "divisions")
+        .selectAll("path")
+        .data(topojson.feature(us, us.objects.originalgeo).features)
+        .enter().append("path")
+        .attr("d", path)
+        .on("click", clicked)
+        .attr("fill", function (d) {
+          d.properties.PartyColour = d.properties.Party == "Australian Labor Party" ? "#DE3533" : d.properties.Party == "Liberal" || d.properties.Party == "Liberal National Party" ? "#0047AB" : d.properties.Party == "The Nationals" ? "#006644" : "grey";
+          return d.properties.PartyColour;
+        });
+
+      g.append("path")
+        .datum(topojson.mesh(us, us.objects.originalgeo, function (a, b) { return a !== b; }))
+        .attr("id", "division-borders")
+        .attr("d", path);
+    })
+  });
+
+  function clicked(d) {
+    var x, y, k;
+
+
+
+    if (d && centered !== d) {
+      var centroid = path.centroid(d);
+      x = centroid[0];
+      y = centroid[1];
+      k = d.properties.Area_SqKm > 1000 && d.properties.Area_SqKm < 16000 ? 25 : d.properties.Area_SqKm < 1000? 50: 4;
+      console.log(d.properties.Area_SqKm);
+      console.log(k);
+      centered = d;
+      document.getElementById("Elect_div").innerHTML = "Electorial Division: " + d.properties.Elect_div;
+      document.getElementById("Margin").innerHTML = "Margin: " + d.properties.Margin;
+      document.getElementById("Party").innerHTML = d.properties.Party;
+      document.getElementById("Copy").innerHTML = d.properties.Copy;
+      document.getElementById("Link").href = d.properties.Link;
+      document.getElementById("divisionCard").setAttribute("style", "background:"+ d.properties.PartyColour +";");
+      document.getElementById("divisionCard").style.display = "block";
+    } else {
+      x = width / 2;
+      y = height / 2;
+      k = 1;
+      centered = null;
+      document.getElementById("divisionCard").style.display = "none";
+    }
+
+    g.selectAll("path")
+      .classed("active", centered && function (d) { return d === centered; });
+
+    g.transition()
+      .duration(750)
+      .attr("transform", "translate(" + width / 2 + "," + height / 2 + ")scale(" + k + ")translate(" + -x + "," + -y + ")")
+      .style("stroke-width", 1.5 / k + "px");
+  }
+
+</script>
